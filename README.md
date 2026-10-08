@@ -1,4 +1,4 @@
-# Osmium
+# Osmium76
 
 A native macOS batch image compressor for Apple silicon. SwiftUI + ImageIO, no
 dependencies, nothing leaves the machine.
