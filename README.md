@@ -5,23 +5,33 @@ dependencies, nothing leaves the machine.
 
 Named after osmium — element 76, the densest naturally occurring element.
 
+## Install
+
+```sh
+./fetch.sh
+```
+
+That checks the prerequisites, clones the repo, builds `Osmium.app`, and tells
+you where it landed. Pass `run` to launch it, `--check` to only report
+prerequisites.
+
+Building locally is the install method. There is no prebuilt binary: it would be
+ad-hoc signed, and macOS quarantine blocks such apps on every Mac except the
+one that built them. A locally built app is never quarantined, so there is
+nothing to allow through.
+
 ## Build
 
 ```sh
-./make-icon.sh      # optional: generates Resources/AppIcon.icns
 ./build.sh          # release build -> build/Osmium.app
 ./build.sh run      # build and launch
 ./build.sh debug    # debug build
+./make-icon.sh      # optional: regenerates Resources/AppIcon.icns
 ```
 
-Git repo on `main`, no remote. There is no test target or CI. Verification is
-`swift build` plus the parse check below.
-
-Then either `open build/Osmium.app`, or during development just:
-
-```sh
-swift run Osmium
-```
+Git repo on `main`, remote `github.com/mtahmid20/Osmium76`. No test target and
+no CI — verification is `swift build` plus the parse check below. During
+development `swift run Osmium` also works.
 
 Requires macOS 14+ and **the full Xcode app**, not just the Command Line Tools.
 The macOS 26+ SDK implements `@State`/`@Binding`/`@Environment` as macros that

@@ -27,11 +27,30 @@ WebP output requires libwebp (`brew install webp`). ImageIO has a WebP decoder
 but no encoder, so `cwebp` does that work. Settings → Formats shows which
 encoder backs each format on your machine.
 
+## Install
+
+```sh
+git clone https://github.com/mtahmid20/Osmium76.git
+cd Osmium76
+./fetch.sh
+```
+
+`fetch.sh` verifies the prerequisites, builds `Osmium.app`, and tells you where
+it is. Then:
+
+```sh
+open build/Osmium.app
+```
+
+A locally built app is never quarantined, so there is nothing to allow through
+Gatekeeper — which is the whole reason there is no binary attached here.
+
 ## Building
 
 ```sh
 ./build.sh            # release -> build/Osmium.app
 ./build.sh run        # build, then launch
+./fetch.sh --check    # report prerequisites only
 ./make-icon.sh        # regenerate the app icon
 ```
 
