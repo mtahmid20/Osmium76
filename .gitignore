@@ -1,0 +1,5 @@
+.build/
+build/
+Tools/LinuxTypecheck/build/
+.DS_Store
+*.xcodeproj

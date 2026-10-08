@@ -1,0 +1,106 @@
+# Caesium
+
+A native macOS batch image compressor for Apple silicon, in the spirit of
+[Caesium Image Compressor](https://caesium.app/). SwiftUI + ImageIO, no
+dependencies, nothing leaves the machine.
+
+## Build
+
+```sh
+./make-icon.sh      # optional: generates Resources/AppIcon.icns
+./build.sh          # release build -> build/Caesium.app
+./build.sh run      # build and launch
+./build.sh debug    # debug build
+```
+
+Then either `open build/Caesium.app`, or during development just:
+
+```sh
+swift run Caesium
+```
+
+Requires macOS 14+ and **the full Xcode app**, not just the Command Line Tools.
+The macOS 26+ SDK implements `@State`/`@Binding`/`@Environment` as macros that
+ship in Xcode's `SwiftUIMacros` compiler plugin; a CLT-only setup cannot expand
+them. `build.sh` checks for this and prints instructions if it is missing.
+
+```sh
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+sudo xcodebuild -runFirstLaunch
+```
+
+## Checking without a Mac
+
+Most of the project can be verified on Linux, which is useful for CI or a
+non-Mac dev box.
+
+```sh
+# 1. Syntax-check every file, including the SwiftUI layer
+swiftc -parse -swift-version 5 $(find Sources -name '*.swift' | sort)
+
+# 2. Fully typecheck the engine and model against hand-written Apple stubs
+./Tools/LinuxTypecheck/typecheck-linux.sh          # uses `swiftc` from PATH
+SWIFTC=/path/to/swiftc ./Tools/LinuxTypecheck/typecheck-linux.sh
+
+# 3. Strict-concurrency pass over the same layer
+swiftc -swift-version 6 -typecheck -I Tools/LinuxTypecheck/build \
+    Sources/Caesium/Core/*.swift Sources/Caesium/Model/*.swift
+```
+
+`Tools/LinuxTypecheck/Modules/` holds minimal stand-ins for CoreGraphics,
+CoreImage, ImageIO, UniformTypeIdentifiers and AppKit, so the compiler can
+resolve the engine's imports. This catches syntax errors, type errors, bad
+optional handling, wrong closures and concurrency mistakes.
+
+It does **not** validate Apple's real SDK signatures, and there is no realistic
+Linux stub for SwiftUI — `Sources/Caesium/App/` is parse-checked only. A real
+`swift build` on a Mac remains the authority for the view layer.
+
+## What it does
+
+- Drag in images, folders, or whole directory trees. Files dropped from Photos
+  or a browser are staged to temp files automatically.
+- Re-compress JPEG / PNG / HEIC / WebP with a quality slider and a longest-edge cap.
+- Strips EXIF, TIFF, IPTC, 8BIM and GPS payloads, or keeps everything but the
+  location tags. Orientation is baked into the pixels, so images stay upright
+  and nothing is double-rotated.
+- Handles alpha correctly: PNG/HEIC/WebP keep transparency, JPEG is flattened on
+  white.
+- Wide-gamut sources (Display P3) stay in P3 instead of being crushed to sRGB.
+- Skip-if-larger, so already-optimised files are never degraded.
+- Writes in place when the format is unchanged, otherwise next to the original
+  with a suffix, or into a folder you pick. Collision-safe.
+- Before/after comparison pane with a draggable divider, zoom and a
+  transparency checkerboard.
+- Parallel jobs (1–12), cancellable, with live totals for bytes saved.
+
+## Keyboard
+
+| Shortcut | Action |
+| --- | --- |
+| `⌘O` | Add files |
+| `⇧⌘O` | Add folder |
+| `⌘↩` | Start compressing |
+| `⌘.` | Stop |
+| `⌫` | Remove selected from the list |
+
+## Layout
+
+```
+Sources/Caesium/Core/     engine — ImageIO encode, metadata policy, batch runner
+Sources/Caesium/Model/    observable app state and the queue
+Sources/Caesium/App/      SwiftUI views
+```
+
+## Notes
+
+- WebP encoding only appears if the running macOS build exposes a WebP encoder
+  through ImageIO. Check Settings → Formats to see what your system supports.
+- PNG output is lossless: only resizing and metadata removal apply.
+- `build.sh` signs ad-hoc, which is enough for local use. For distribution you
+  need a Developer ID certificate and a notarised bundle.
+- "Remove location data" drops the GPS dictionary and any geographic EXIF/TIFF
+  tag. Individual EXIF/TIFF keys are matched by their literal string values
+  because the SDK does not expose the `kCGImagePropertyExif…` constants to Swift.
+- HEIC alpha is written automatically by ImageIO from the source `CGImage`; the
+  HEIC dictionary keys that control it are private API.
