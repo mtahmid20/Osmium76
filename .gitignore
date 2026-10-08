@@ -3,3 +3,5 @@ build/
 Tools/LinuxTypecheck/build/
 .DS_Store
 *.xcodeproj
+# Xcode-generated scheme and per-user state; machine-specific
+.swiftpm/

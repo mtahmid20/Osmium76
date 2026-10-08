@@ -2,6 +2,28 @@ import Foundation
 import AppKit
 import Observation
 
+/// Carries cancellation from a cancellable Swift task into work that has no
+/// task context of its own (`Task.detached`, a `Process` wait, libwebp).
+///
+/// `onCancel` runs on whichever thread called `cancel()`, so the flag is
+/// lock-guarded rather than a bare `Bool`.
+final class CancellationFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var flag = false
+
+    var isCancelled: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return flag
+    }
+
+    func cancel() {
+        lock.lock()
+        flag = true
+        lock.unlock()
+    }
+}
+
 @MainActor
 @Observable
 final class CompressionModel {
@@ -42,23 +64,37 @@ final class CompressionModel {
     var failedCount: Int { jobs.filter { $0.state == .failed }.count }
     var finishedCount: Int { jobs.count - pendingCount }
 
+    /// Jobs that produced a comparable output. A failed job is excluded from both
+    /// sides: it never saved anything, and counting its original size against
+    /// itself cancelled out while diluting the percentage.
+    private var accountedJobs: [ImageJob] {
+        jobs.filter { $0.state == .done || $0.state == .skipped }
+    }
+
+    /// Sum of the source sizes of the jobs a reduction can be measured against.
     var totalOriginalBytes: Int64 {
-        jobs.filter { $0.state.isFinished }.reduce(0) { $0 + $1.originalSize }
+        accountedJobs.reduce(0) { $0 + $1.originalSize }
     }
 
     var totalOutputBytes: Int64 {
-        jobs.reduce(0) { total, job in
-            guard job.state.isFinished else { return total }
-            return total + (job.outputSize ?? job.originalSize)
+        accountedJobs.reduce(0) { total, job in
+            // A skipped job left its original untouched, so its "output" is the
+            // original by definition.
+            total + (job.outputSize ?? job.originalSize)
         }
     }
 
-    var totalSavedBytes: Int64 { max(0, totalOriginalBytes - totalOutputBytes) }
+    /// Signed, so a batch that grew reports negative rather than being clamped
+    /// to a flattering zero.
+    var totalSavedBytes: Int64 { totalOriginalBytes - totalOutputBytes }
 
     var savedPercent: Double {
         guard totalOriginalBytes > 0 else { return 0 }
         return Double(totalSavedBytes) / Double(totalOriginalBytes) * 100
     }
+
+    /// True when the output came out larger than the input.
+    var isRegression: Bool { totalSavedBytes < 0 }
 
     var canStart: Bool { !isRunning && !jobs.isEmpty && jobs.contains { !$0.state.isFinished } }
 
@@ -178,12 +214,17 @@ final class CompressionModel {
         // drop, which is our own scratch file, and any run with the toggle off
         // but no folder chosen. Both ask rather than quietly writing to a
         // fallback the user never picked.
+        //
+        // Note that `writeAlongside` is deliberately left alone. Setting only
+        // `outputFolder` is enough: `destinationURL` sends staged drops to that
+        // folder while real files stay where they are. Flipping the toggle here
+        // used to relocate the *whole* batch, so one image dragged out of
+        // Photos moved every photo the user dropped from Finder.
         let needsDestination = options.outputFolder == nil
             && (!options.writeAlongside || hasStagedDrops)
         if needsDestination {
             guard let folder = FilePicker.chooseOutputFolder() else { return }
             options.outputFolder = folder
-            options.writeAlongside = false
         }
 
         let queue = jobs.filter { !$0.state.isFinished }
@@ -229,19 +270,27 @@ final class CompressionModel {
             ) { group in
                 for job in batch {
                     let destination = destinations[job.id]
+                    let cancellation = CancellationFlag()
                     group.addTask(priority: .userInitiated) {
-                        await Task.detached(priority: .userInitiated) {
-                            BatchRunner.run(
-                                job: job,
-                                options: options,
-                                destination: destination,
-                                // `Task.detached` does not inherit cancellation,
-                                // so the child task's own flag is consulted. This
-                                // is what makes Stop feel immediate rather than
-                                // taking effect only at the next wave boundary.
-                                isCancelled: { Task.isCancelled }
-                            )
-                        }.value
+                        // Group children ARE cancelled when the run task is,
+                        // but a Task.detached inside one inherits nothing — its
+                        // own flag is never set, so reading Task.isCancelled
+                        // there always returns false. The cancellation handler
+                        // is what bridges the two: onCancel fires on the
+                        // cancelled group child and flips the flag that
+                        // BatchRunner and WebPEncoder actually poll.
+                        await withTaskCancellationHandler {
+                            await Task.detached(priority: .userInitiated) {
+                                BatchRunner.run(
+                                    job: job,
+                                    options: options,
+                                    destination: destination,
+                                    isCancelled: { cancellation.isCancelled }
+                                )
+                            }.value
+                        } onCancel: {
+                            cancellation.cancel()
+                        }
                     }
                 }
                 var collected: [BatchRunner.Outcome] = []
@@ -273,6 +322,13 @@ final class CompressionModel {
         jobs[index].message = outcome.message
         jobs[index].preview = outcome.preview
         jobs[index].originalPreview = outcome.originalPreview
+
+        // The pane caches decoded previews under "<job id>-before"/"-after",
+        // which survive a Reset, so a second run would be shown the first run's
+        // image. Drop them before storing the new payloads.
+        ImageCache.shared.invalidateData(key: "\(outcome.id.uuidString)-before")
+        ImageCache.shared.invalidateData(key: "\(outcome.id.uuidString)-after")
+
         if outcome.state == .done, let outputURL = outcome.outputURL {
             ImageCache.shared.invalidate(url: outputURL)
         }
@@ -320,7 +376,7 @@ final class CompressionModel {
         \(lines)
 
         Total: \(ByteFormat.string(totalOriginalBytes)) → \(ByteFormat.string(totalOutputBytes)) \
-        (\(String(format: "%.1f", savedPercent))% smaller)
+        (\(String(format: "%.1f", abs(savedPercent)))% \(savedPercent < 0 ? "larger" : "smaller"), originals kept)
         """
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)

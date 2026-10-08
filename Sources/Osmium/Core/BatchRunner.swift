@@ -83,10 +83,16 @@ public enum BatchRunner {
             }
 
             let preview = ImageCompressor.decodeThumbnail(from: output.data, maxPixel: 1800, quality: 0.92)
-            // An in-place rewrite destroys the source, so snapshot "before" now.
+            // Snapshot "before" whenever the source is about to become
+            // unreadable: either an in-place rewrite replaced it, or
+            // delete-originals is about to remove it. Without this the
+            // comparison pane falls back to reading the source from disk,
+            // finds nothing, and renders a placeholder under an "ORIGINAL"
+            // badge. Cheaper than the 1800px version: this is only the
+            // reference half, so a smaller snapshot is enough.
             var before: Data? = nil
-            if inPlace {
-                before = ImageCompressor.decodeThumbnail(from: input, maxPixel: 1800, quality: 0.85)
+            if inPlace || options.deleteOriginal {
+                before = ImageCompressor.decodeThumbnail(from: input, maxPixel: 1200, quality: 0.85)
             }
             return Outcome(
                 id: job.id,
@@ -136,7 +142,7 @@ public enum BatchRunner {
 
         let temporary = destination
             .deletingLastPathComponent()
-            .appendingPathComponent(".\(destination.lastPathComponent).caesium-tmp")
+            .appendingPathComponent(".\(destination.lastPathComponent).osmium-tmp")
         // Capture the source's attributes first: once it is replaced they are
         // gone, and `replaceItemAt` alone does not carry extended attributes
         // across — notably `com.apple.quarantine`, which records that a file

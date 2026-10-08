@@ -1,6 +1,6 @@
 // Linux stand-in for Apple's CoreGraphics.
 //
-// Only the surface Caesium actually touches is declared, and CF* opaque types
+// Only the surface Osmium actually touches is declared, and CF* opaque types
 // are aliased to plain Swift types. That keeps the app source unmodified while
 // still letting the compiler check our own code (optionality, arithmetic,
 // generics, Sendable, closure captures). It does NOT validate Apple's exact

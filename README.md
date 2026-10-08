@@ -1,14 +1,15 @@
-# Caesium
+# Osmium
 
-A native macOS batch image compressor for Apple silicon, in the spirit of
-[Caesium Image Compressor](https://caesium.app/). SwiftUI + ImageIO, no
+A native macOS batch image compressor for Apple silicon. SwiftUI + ImageIO, no
 dependencies, nothing leaves the machine.
+
+Named after osmium — element 76, the densest naturally occurring element.
 
 ## Build
 
 ```sh
 ./make-icon.sh      # optional: generates Resources/AppIcon.icns
-./build.sh          # release build -> build/Caesium.app
+./build.sh          # release build -> build/Osmium.app
 ./build.sh run      # build and launch
 ./build.sh debug    # debug build
 ```
@@ -16,10 +17,10 @@ dependencies, nothing leaves the machine.
 Git repo on `main`, no remote. There is no test target or CI. Verification is
 `swift build` plus the parse check below.
 
-Then either `open build/Caesium.app`, or during development just:
+Then either `open build/Osmium.app`, or during development just:
 
 ```sh
-swift run Caesium
+swift run Osmium
 ```
 
 Requires macOS 14+ and **the full Xcode app**, not just the Command Line Tools.
@@ -47,7 +48,7 @@ SWIFTC=/path/to/swiftc ./Tools/LinuxTypecheck/typecheck-linux.sh
 
 # 3. Strict-concurrency pass over the same layer
 swiftc -swift-version 6 -typecheck -I Tools/LinuxTypecheck/build \
-    Sources/Caesium/Core/*.swift Sources/Caesium/Model/*.swift
+    Sources/Osmium/Core/*.swift Sources/Osmium/Model/*.swift
 ```
 
 `Tools/LinuxTypecheck/Modules/` holds minimal stand-ins for CoreGraphics,
@@ -56,7 +57,7 @@ resolve the engine's imports. This catches syntax errors, type errors, bad
 optional handling, wrong closures and concurrency mistakes.
 
 It does **not** validate Apple's real SDK signatures, and there is no realistic
-Linux stub for SwiftUI — `Sources/Caesium/App/` is parse-checked only. A real
+Linux stub for SwiftUI — `Sources/Osmium/App/` is parse-checked only. A real
 `swift build` on a Mac remains the authority for the view layer.
 
 ## What it does
@@ -90,9 +91,9 @@ Linux stub for SwiftUI — `Sources/Caesium/App/` is parse-checked only. A real
 ## Layout
 
 ```
-Sources/Caesium/Core/     engine — ImageIO encode, metadata policy, batch runner
-Sources/Caesium/Model/    observable app state and the queue
-Sources/Caesium/App/      SwiftUI views
+Sources/Osmium/Core/     engine — ImageIO encode, metadata policy, batch runner
+Sources/Osmium/Model/    observable app state and the queue
+Sources/Osmium/App/      SwiftUI views
 ```
 
 ## Notes

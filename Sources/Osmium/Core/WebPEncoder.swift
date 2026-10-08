@@ -87,7 +87,7 @@ public enum WebPEncoder {
     /// One folder per encode so parallel jobs never collide on the same filenames.
     private static func stagingFolder() throws -> URL {
         let folder = FileManager.default.temporaryDirectory
-            .appendingPathComponent("Caesium WebP", isDirectory: true)
+            .appendingPathComponent("Osmium WebP", isDirectory: true)
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         return folder

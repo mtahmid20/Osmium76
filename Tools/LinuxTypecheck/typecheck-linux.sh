@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 #
-# Typechecks Caesium's engine and model layer on Linux.
+# Typechecks Osmium's engine and model layer on Linux.
 #
 # Apple frameworks (CoreGraphics, CoreImage, ImageIO, UniformTypeIdentifiers,
 # AppKit) do not exist off macOS, so this builds a hand-written stub of the
-# surface we use and runs the compiler over Sources/Caesium/{Core,Model}.
+# surface we use and runs the compiler over Sources/Osmium/{Core,Model}.
 #
 # What this catches: syntax, type errors, bad optional handling, wrong closures,
 # Sendable/conformance mistakes, arithmetic mistakes.
 # What this does NOT catch: mismatches against Apple's real SDK signatures, and
-# anything in Sources/Caesium/App (SwiftUI has no realistic Linux stub).
+# anything in Sources/Osmium/App (SwiftUI has no realistic Linux stub).
 #
 # On a Mac, prefer:  swift build
 #
@@ -19,7 +19,7 @@ cd "$(dirname "$0")/../.."
 SWIFTC="${SWIFTC:-swiftc}"
 MODULES="Tools/LinuxTypecheck/Modules"
 OUT="Tools/LinuxTypecheck/build"
-APP="Sources/Caesium"
+APP="Sources/Osmium"
 
 rm -rf "$OUT"
 mkdir -p "$OUT"

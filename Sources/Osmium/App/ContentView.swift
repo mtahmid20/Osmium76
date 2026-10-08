@@ -45,7 +45,7 @@ struct ContentView: View {
             )
         }
         .toolbar { toolbarContent }
-        .navigationTitle("Caesium")
+        .navigationTitle("Osmium")
     }
 
     // MARK: - Drops

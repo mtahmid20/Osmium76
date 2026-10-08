@@ -23,9 +23,12 @@ public struct ImageJob: Identifiable, Sendable {
     public let pixelHeight: Int
     public let sourceFormat: String
     public let thumbnail: Data?
-    /// > 1 for animated GIF/WebP, APNG and multi-page TIFF, which are refused
-    /// rather than flattened to a single frame.
+    /// Frames in the source container. > 1 does not imply animation: a
+    /// multi-size .ico reports one frame per resolution.
     public let frameCount: Int
+    /// True for animated GIF/WebP, APNG and multi-page TIFF, which are refused
+    /// rather than flattened to a single frame.
+    public let isAnimatedSource: Bool
 
     public var state: State = .pending
     public var outputURL: URL? = nil
@@ -46,7 +49,8 @@ public struct ImageJob: Identifiable, Sendable {
         pixelHeight: Int,
         sourceFormat: String,
         thumbnail: Data? = nil,
-        frameCount: Int = 1
+        frameCount: Int = 1,
+        isAnimatedSource: Bool = false
     ) {
         self.id = id
         self.sourceURL = sourceURL
@@ -56,11 +60,12 @@ public struct ImageJob: Identifiable, Sendable {
         self.sourceFormat = sourceFormat
         self.thumbnail = thumbnail
         self.frameCount = frameCount
+        self.isAnimatedSource = isAnimatedSource
     }
 
     public var displayName: String { sourceURL.lastPathComponent }
 
-    public var isAnimated: Bool { frameCount > 1 }
+    public var isAnimated: Bool { isAnimatedSource }
 
     public var folderPath: String { sourceURL.deletingLastPathComponent().path }
 
@@ -68,11 +73,8 @@ public struct ImageJob: Identifiable, Sendable {
         Double(pixelWidth * pixelHeight) / 1_000_000.0
     }
 
-    public var savedBytes: Int64? {
-        guard let outputSize, state == .done else { return nil }
-        return originalSize - outputSize
-    }
-
+    /// Signed: negative when the output came out larger than the original, so
+    /// the row can report that rather than clamping it away.
     public var savedFraction: Double? {
         guard let outputSize, originalSize > 0, state == .done else { return nil }
         return 1.0 - (Double(outputSize) / Double(originalSize))

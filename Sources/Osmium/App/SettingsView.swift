@@ -31,7 +31,7 @@ struct SettingsView: View {
             }
 
             Section {
-                Button("Reveal Caesium in Finder") {
+                Button("Reveal Osmium in Finder") {
                     NSWorkspace.shared.selectFile(
                         nil,
                         inFileViewerRootedAtPath: Bundle.main.bundlePath

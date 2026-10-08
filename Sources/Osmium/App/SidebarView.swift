@@ -55,9 +55,9 @@ struct SidebarView: View {
                     }
                     .padding(.vertical, 1)
                 } else {
-                    Text(model.options.lossless
-                         ? "Lossless — quality is not used."
-                         : "PNG is lossless — only resizing and metadata apply.")
+                    // Only reachable when the format itself is lossless; the
+                    // WebP lossless case is handled by the toggle above.
+                    Text("PNG is lossless — only resizing and metadata apply.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -217,6 +217,10 @@ struct SidebarView: View {
                     options.format = newFormat
                     options.quality = min(options.quality, newFormat.qualityRange.upperBound)
                     options.quality = max(options.quality, newFormat.qualityRange.lowerBound)
+                    // Only WebP has a lossless mode; carrying the flag across
+                    // would suppress the quality slider for a format that
+                    // ignores it.
+                    if newFormat != .webp { options.lossless = false }
                 }
             }
         )

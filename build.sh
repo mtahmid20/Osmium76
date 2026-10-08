@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Builds Caesium.app for Apple silicon.
+# Builds Osmium.app for Apple silicon.
 #
 #   ./build.sh              release build
 #   ./build.sh debug        debug build
@@ -22,7 +22,7 @@ for arg in "$@"; do
 done
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
-  echo "error: Caesium only builds on macOS." >&2
+  echo "error: Osmium only builds on macOS." >&2
   exit 1
 fi
 
@@ -66,13 +66,13 @@ echo "==> Building (${CONFIG}, $(uname -m)) using $DEV_DIR"
 swift build -c "$CONFIG" --arch arm64
 
 BIN_PATH="$(swift build -c "$CONFIG" --arch arm64 --show-bin-path)"
-APP="build/Caesium.app"
+APP="build/Osmium.app"
 
 echo "==> Assembling ${APP}"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
-cp "$BIN_PATH/Caesium" "$APP/Contents/MacOS/Caesium"
+cp "$BIN_PATH/Osmium" "$APP/Contents/MacOS/Osmium"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 

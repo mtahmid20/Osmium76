@@ -2,15 +2,15 @@
 import PackageDescription
 
 let package = Package(
-    name: "Caesium",
+    name: "Osmium",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "Caesium", targets: ["Caesium"])
+        .executable(name: "Osmium", targets: ["Osmium"])
     ],
     targets: [
         .executableTarget(
-            name: "Caesium",
-            path: "Sources/Caesium"
+            name: "Osmium",
+            path: "Sources/Osmium"
         )
     ]
 )

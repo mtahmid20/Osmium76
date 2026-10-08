@@ -48,8 +48,11 @@ public enum ImageCompressor {
         public let formatName: String
         public let orientation: CGImagePropertyOrientation
         public let hasAlpha: Bool
-        /// Animated GIF/WebP, APNG and multi-page TIFF report more than one frame.
+        /// Frames in the container. > 1 does not imply animation: a multi-size
+        /// .ico has one frame per resolution.
         public let frameCount: Int
+        /// True only when those frames are separate images.
+        public let isAnimated: Bool
     }
 
     /// Reads dimensions and metadata without fully decoding pixel data.
@@ -63,6 +66,7 @@ public enum ImageCompressor {
         let orientationValue = (properties[kCGImagePropertyOrientation] as? NSNumber)?.uint32Value ?? 1
         let orientation = CGImagePropertyOrientation(rawValue: orientationValue) ?? .up
         let hasAlpha = (properties[kCGImagePropertyHasAlpha] as? NSNumber)?.boolValue ?? false
+        let type = CGImageSourceGetType(source) as String? ?? ""
 
         return SourceInfo(
             pixelWidth: width,
@@ -71,7 +75,11 @@ public enum ImageCompressor {
             formatName: formatName(of: url),
             orientation: orientation,
             hasAlpha: hasAlpha,
-            frameCount: CGImageSourceGetCount(source)
+            frameCount: CGImageSourceGetCount(source),
+            // A multi-size .ico reports one frame per resolution of the same
+            // image, so the raw count must not be read as "animated" or the
+            // sidebar would warn about a perfectly ordinary icon.
+            isAnimated: CGImageSourceGetCount(source) > 1 && frameCountIsContent(type)
         )
     }
 
@@ -137,10 +145,17 @@ public enum ImageCompressor {
         let frameCount = CGImageSourceGetCount(source)
         guard frameCount > 0 else { throw CompressionError.noFrames }
         // Only frame 0 is ever decoded and a single-frame destination is built,
-        // so anything multi-frame would silently lose its remaining frames —
+        // so a multi-frame source would silently lose its remaining frames —
         // and the caller is allowed to delete the original afterwards. Refuse
         // rather than destroy the animation.
-        guard frameCount == 1 else { throw CompressionError.animatedSource(frameCount: frameCount) }
+        //
+        // Only for containers where a frame is real content. A multi-size .ico
+        // reports one frame per resolution of the *same* icon, so refusing it
+        // would reject an ordinary file with a misleading message.
+        let type = CGImageSourceGetType(source) as String? ?? ""
+        guard frameCount == 1 || !Self.frameCountIsContent(type) else {
+            throw CompressionError.animatedSource(frameCount: frameCount)
+        }
 
         let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
         let orientationValue = (properties?[kCGImagePropertyOrientation] as? NSNumber)?.uint32Value ?? 1
@@ -174,6 +189,24 @@ public enum ImageCompressor {
 
     private static func checkCancelled(_ isCancelled: () -> Bool) throws {
         if isCancelled() { throw CompressionError.cancelled }
+    }
+
+    /// Containers whose extra frames are separate images rather than alternate
+    /// resolutions of one image. `com.microsoft.ico` is deliberately absent: its
+    /// frames are the same icon at different sizes, so decoding frame 0 loses
+    /// nothing meaningful and refusing it would be wrong.
+    private static func frameCountIsContent(_ type: String) -> Bool {
+        switch type {
+        case "com.compuserve.gif",
+             "org.webmproject.webp",
+             "com.apple.icns",
+             "com.adobe.photoshop-image",
+             "public.avif":
+            return true
+        default:
+            // APNG and multi-page TIFF both report public.png / public.tiff.
+            return type == "public.png" || type == "public.tiff"
+        }
     }
 
     /// Bakes EXIF orientation into pixels and applies the resolution cap.
@@ -342,11 +375,11 @@ public enum ImageCompressor {
 
     /// - Parameter reservedPaths: paths already claimed by this batch. Two
     ///   sources with the same stem in different folders collapse to one name
-    ///   in a shared output folder, and with `avoidOverwrite` on, resolving each
-    ///   independently races: both see the name as free and both write it, so
-    ///   one output is overwritten and both originals may then be deleted.
-    ///   Reserving on the main actor, before any encoding starts, makes the
-    ///   assignment single-threaded regardless of parallelism.
+///   in a shared output folder resolve to the same name. Resolving each
+///   independently races: both see the name as free and both write it, so one
+///   output is overwritten and both originals may then be deleted. Reserving on
+///   the main actor, before any encoding starts, makes the assignment
+///   single-threaded regardless of parallelism.
     public static func destinationURL(
         for job: ImageJob,
         options: CompressionOptions,
@@ -374,17 +407,31 @@ public enum ImageCompressor {
             .appendingPathComponent(name)
             .appendingPathExtension(options.format.fileExtension)
 
-        if options.avoidOverwrite && candidate != job.sourceURL {
-            var counter = 2
-            while FileManager.default.fileExists(atPath: candidate.path)
-                || reservedPaths.contains(candidate.standardizedFileURL.path) {
-                candidate = folder
-                    .appendingPathComponent("\(name) (\(counter))")
-                    .appendingPathExtension(options.format.fileExtension)
-                counter += 1
-            }
+        // Two jobs in one batch must never be handed the same output path, whatever
+        // the user's naming preference. With "Never overwrite" off they would
+        // both see the name as free, both write it, and — if originals are being
+        // deleted — two source photos would be destroyed to produce one file.
+        // So an occupied name always advances, and only the check against files
+        // already on disk is a user setting.
+        var counter = 2
+        while isTaken(candidate, by: job, options: options, reserved: reservedPaths) {
+            candidate = folder
+                .appendingPathComponent("\(name) (\(counter))")
+                .appendingPathExtension(options.format.fileExtension)
+            counter += 1
         }
         return candidate
+    }
+
+    private static func isTaken(
+        _ candidate: URL,
+        by job: ImageJob,
+        options: CompressionOptions,
+        reserved: Set<String>
+    ) -> Bool {
+        if candidate == job.sourceURL { return false }
+        if reserved.contains(candidate.standardizedFileURL.path) { return true }
+        return options.avoidOverwrite && FileManager.default.fileExists(atPath: candidate.path)
     }
 
     /// Assigns a distinct destination to every job in a batch. Must be called

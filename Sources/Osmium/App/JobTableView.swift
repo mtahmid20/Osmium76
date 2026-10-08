@@ -69,7 +69,7 @@ struct JobTableView: View {
                     }
                     .width(min: 90, ideal: 100)
 
-                    TableColumn("Saved") { job in
+                    TableColumn("Change") { job in
                         SavingsCell(job: job)
                     }
                     .width(min: 80, ideal: 90)
@@ -146,13 +146,20 @@ private struct SavingsCell: View {
     var body: some View {
         if let fraction = job.savedFraction, job.state == .done {
             HStack(spacing: 6) {
+                // `ProgressView` only renders 0…1, so an increase shows an empty
+                // track plus a signed percentage rather than a misleading full bar.
                 ProgressView(value: max(0, fraction))
                     .progressViewStyle(.linear)
                     .frame(width: 36)
-                Text("\(Int((fraction * 100).rounded()))%")
+                Text(fraction < 0
+                     ? "+\(Int((abs(fraction) * 100).rounded()))%"
+                     : "\(Int((fraction * 100).rounded()))%")
                     .monospacedDigit()
-                    .foregroundStyle(fraction > 0 ? Color.green : Color.secondary)
+                    .foregroundStyle(fraction > 0 ? Color.green : (fraction < 0 ? Color.orange : Color.secondary))
             }
+            .help(fraction < 0
+                  ? "The compressed copy is larger than the original."
+                  : "")
         } else {
             Text("—").foregroundStyle(.tertiary)
         }

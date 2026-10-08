@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct CaesiumApp: App {
+struct OsmiumApp: App {
     @State private var model = CompressionModel()
 
     init() {

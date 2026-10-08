@@ -51,7 +51,11 @@ struct SummaryBar: View {
                         title: "Compressed",
                         value: ByteFormat.string(model.totalOutputBytes)
                     )
-                    SavingsBadge(percent: model.savedPercent, bytes: model.totalSavedBytes)
+                    SavingsBadge(
+                        percent: model.savedPercent,
+                        bytes: model.totalSavedBytes,
+                        grew: model.isRegression
+                    )
                 } else {
                     Text("\(model.jobs.count) image\(model.jobs.count == 1 ? "" : "s") in the queue")
                         .font(.callout)
@@ -107,16 +111,25 @@ private struct StatBlock: View {
 private struct SavingsBadge: View {
     let percent: Double
     let bytes: Int64
+    let grew: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text("Saved")
+            // "Reduction", not "Saved": originals are kept by default, so these
+            // are smaller copies rather than space freed on disk.
+            Text(grew ? "Increased" : "Reduction")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-            Text("\(String(format: "%.1f", percent))% · \(ByteFormat.string(bytes))")
+            Text("\(String(format: "%.1f", percent))% · \(ByteFormat.string(abs(bytes)))")
                 .font(.body.weight(.semibold))
                 .monospacedDigit()
-                .foregroundStyle(percent > 0 ? Color.green : Color.secondary)
+                .foregroundStyle(tint)
         }
+        .help("How much smaller the compressed copies are than the originals. The originals are kept unless \"Delete originals\" is on.")
+    }
+
+    private var tint: Color {
+        if grew { return .orange }
+        return percent > 0 ? .green : .secondary
     }
 }

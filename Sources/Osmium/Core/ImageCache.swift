@@ -52,6 +52,14 @@ final class ImageCache: @unchecked Sendable {
         cache.removeObject(forKey: "preview-\(url.path)-1800" as NSString)
     }
 
+    /// Drops the entries cached under a `data-` key. `image(from:key:)` keys
+    /// are derived from the job id and the role ("before"/"after"), which stay
+    /// the same across re-runs, so without this the pane would keep showing the
+    /// previous run's image after Reset.
+    func invalidateData(key: String, maxPixel: CGFloat = 1800) {
+        cache.removeObject(forKey: "data-\(key)-\(Int(maxPixel))" as NSString)
+    }
+
     private static func makeImage(from data: Data, maxPixel: CGFloat) -> NSImage? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
         let options: [CFString: Any] = [

@@ -1,12 +1,12 @@
 # AGENTS.md
 
-macOS batch image compressor. SwiftUI + ImageIO, single executable target, no
+Osmium — a macOS batch image compressor (formerly Caesium). SwiftUI + ImageIO, single executable target, no
 dependencies. Apple silicon only.
 
 ## Build and verify
 
 ```sh
-./build.sh                # release -> build/Caesium.app (ad-hoc signed)
+./build.sh                # release -> build/Osmium.app (ad-hoc signed)
 ./build.sh debug          # debug build
 ./build.sh run            # build, then launch
 ```
@@ -30,7 +30,7 @@ the CoreGraphics stub does not provide. Fix the stub before relying on this path
 It also needs extending whenever you touch an Apple API surface, since a missing
 stub member breaks the run. Stubs cover CoreGraphics, CoreImage, ImageIO,
 UniformTypeIdentifiers, AppKit. SwiftUI cannot be stubbed, so
-`Sources/Caesium/App/` is parse-checked only.
+`Sources/Osmium/App/` is parse-checked only.
 
 ## Git
 
@@ -52,9 +52,9 @@ it is under `Platforms/MacOSX.platform/Developer/usr/lib/swift/host/plugins`.
 ## Architecture
 
 ```
-Sources/Caesium/Core/    engine: encode, metadata policy, batch runner
-Sources/Caesium/Model/   @Observable queue/state (CompressionModel)
-Sources/Caesium/App/     SwiftUI views
+Sources/Osmium/Core/    engine: encode, metadata policy, batch runner
+Sources/Osmium/Model/   @Observable queue/state (CompressionModel)
+Sources/Osmium/App/     SwiftUI views
 ```
 
 `CompressionModel` owns the queue; `BatchRunner.run(job:options:)` is the pure

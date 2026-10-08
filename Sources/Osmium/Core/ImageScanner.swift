@@ -46,7 +46,8 @@ public enum ImageScanner {
             pixelHeight: info.pixelHeight,
             sourceFormat: ImageCompressor.formatName(of: url),
             thumbnail: thumb,
-            frameCount: info.frameCount
+            frameCount: info.frameCount,
+            isAnimatedSource: info.isAnimated
         )
     }
 }

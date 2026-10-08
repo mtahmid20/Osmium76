@@ -139,6 +139,10 @@ public struct CompressionOptions: Sendable, Codable, Equatable {
     public func applyingPreset(_ preset: Preset) -> CompressionOptions {
         var copy = self
         copy.preset = preset
+        // Only the WebP lossless preset wants this. Left set from an earlier one,
+        // it would hide the quality slider for JPEG — a format that ignores the
+        // flag entirely, so the control would vanish with no cause shown.
+        copy.lossless = preset == .webpLossless
         switch preset {
         case .webReady:
             copy.format = .jpeg

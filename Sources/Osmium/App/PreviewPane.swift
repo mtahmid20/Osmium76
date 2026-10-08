@@ -174,9 +174,13 @@ struct PreviewPane: View {
             }
 
             if let fraction = job.savedFraction, job.state == .done {
-                Text("\(Int((fraction * 100).rounded()))% smaller")
+                // Signed, so a larger output reads as an increase rather than a
+                // negative percentage under the word "smaller".
+                Text(fraction < 0
+                     ? "\(Int((abs(fraction) * 100).rounded()))% larger"
+                     : "\(Int((fraction * 100).rounded()))% smaller")
                     .font(.callout.weight(.semibold))
-                    .foregroundStyle(fraction > 0 ? Color.green : Color.secondary)
+                    .foregroundStyle(fraction > 0 ? Color.green : (fraction < 0 ? Color.orange : Color.secondary))
                     .monospacedDigit()
             }
 
