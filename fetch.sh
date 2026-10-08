@@ -169,10 +169,17 @@ fi
 # ------------------------------------------------------------------------- build
 say ""
 say "${bold}Building${off} ($CONFIG)"
+# An empty array plus `set -u` is an unbound-variable error on older bash, so
+# only expand it when there is something to pass.
 BUILD_ARGS=()
 [[ "$CONFIG" == "debug" ]] && BUILD_ARGS+=(debug)
 (( LAUNCH )) && BUILD_ARGS+=(run)
-"$target/build.sh" "${BUILD_ARGS[@]}"
+
+if (( ${#BUILD_ARGS[@]} > 0 )); then
+  "$target/build.sh" "${BUILD_ARGS[@]}"
+else
+  "$target/build.sh"
+fi
 
 APP="$target/build/Osmium.app"
 
