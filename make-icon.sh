@@ -2,10 +2,10 @@
 #
 # Draws Resources/AppIcon.icns for Osmium.
 #
-# The mark is an osmium crystal: a hexagonal atomic-lattice motif over a deep
-# graphite tile, with a downward compression arrow cutting through the centre.
-# Osmium is the densest naturally occurring element, which is the joke the name
-# is built on, and the arrow keeps it reading as a compressor at 16 px.
+# The mark is the element itself: "Os" with its atomic number, 76, glowing on a
+# deep graphite tile. Osmium is the densest naturally occurring element, which
+# is the joke the name is built on, and a periodic-table lockup gives the app an
+# identity no generic "down arrow in a box" could.
 #
 # Requires macOS (uses Core Graphics through a small Swift script).
 #
@@ -79,55 +79,61 @@ func makeIcon(size: Int) -> Data? {
         )
     }
 
-    // One bold hexagonal crystal rather than a honeycomb: a glyph has to
-    // survive being drawn 16 px wide, and a lattice of 20 hexagons turned to
-    // mush there. A single outline stays readable at every size.
-    let hexRadius = u(330)
-    let hexPath = CGMutablePath()
-    for i in 0..<6 {
-        let angle = CGFloat(i) * .pi / 3 + .pi / 6
-        let point = CGPoint(x: tile.midX + hexRadius * cos(angle),
-                            y: tile.midY + hexRadius * sin(angle))
-        if i == 0 { hexPath.move(to: point) } else { hexPath.addLine(to: point) }
-    }
-    hexPath.closeSubpath()
+    // "Os" over "76". Drawn with AppKit text rather than paths so the letterforms
+    // are the real system face, which stays crisp at every size in the set.
+    let nsContext = NSGraphicsContext(cgContext: context, flipped: false)
+    NSGraphicsContext.saveGraphicsState()
+    NSGraphicsContext.current = nsContext
 
+    // Sized off the tile so the lockup keeps its proportions at any resolution.
+    let symbolSize = tile.width * 0.40
+    let symbol = NSAttributedString(
+        string: "Os",
+        attributes: [
+            .font: NSFont.systemFont(ofSize: symbolSize, weight: .heavy),
+            .foregroundColor: NSColor(red: 0.97, green: 0.98, blue: 1.0, alpha: 1)
+        ]
+    )
+    let symbolBox = symbol.size()
+
+    // The number sits below with a gap, tight enough to read as one lockup.
+    let numberSize = symbolSize * 0.34
+    let number = NSAttributedString(
+        string: "76",
+        attributes: [
+            .font: NSFont.systemFont(ofSize: numberSize, weight: .semibold),
+            .foregroundColor: NSColor(red: 0.60, green: 0.79, blue: 1.0, alpha: 0.95)
+        ]
+    )
+    let numberBox = number.size()
+    let gap = tile.width * 0.05
+    let lockupHeight = symbolBox.height + gap + numberBox.height
+
+    // In an unflipped AppKit context a text origin is the bottom of the line, so
+    // the lockup is laid out downward from its top edge. Centring on the tile's
+    // midpoint without this put the atomic number below the tile entirely.
+    let symbolOrigin = NSPoint(
+        x: tile.midX - symbolBox.width / 2,
+        y: tile.midY + lockupHeight / 2 - symbolBox.height
+    )
+    let numberOrigin = NSPoint(
+        x: tile.midX - numberBox.width / 2,
+        y: symbolOrigin.y - gap - numberBox.height
+    )
+
+    // One glow pass behind the symbol, then a tighter one for the number, so the
+    // pair reads as lit from a single source.
     context.saveGState()
-    // Glow behind the stroke reads as the metal catching light, and keeps the
-    // outline from disappearing against the dark tile when scaled down.
-    context.setShadow(offset: .zero, blur: u(54), color: CGColor(red: 0.40, green: 0.66, blue: 1.0, alpha: 0.9))
-    context.addPath(hexPath)
-    context.setStrokeColor(CGColor(red: 0.62, green: 0.85, blue: 1.0, alpha: 1))
-    context.setLineWidth(u(36))
-    context.setLineJoin(.round)
-    context.strokePath()
+    context.setShadow(offset: .zero, blur: u(46), color: CGColor(red: 0.35, green: 0.62, blue: 1.0, alpha: 0.9))
+    symbol.draw(at: symbolOrigin)
     context.restoreGState()
 
-    // Compression arrow inside the crystal, one tapered shape so the joins are
-    // seamless. Sized to fill roughly two thirds of the hexagon's height.
     context.saveGState()
-    context.setShadow(offset: .zero, blur: u(44), color: CGColor(red: 0, green: 0, blue: 0, alpha: 0.8))
-
-    let arrow = CGMutablePath()
-    let top = tile.midY + u(184)
-    let tip = tile.midY - u(158)
-    let halfShaft = u(58)
-    let halfShoulder = u(190)
-    let shoulderY = tip + u(120)
-
-    arrow.move(to: CGPoint(x: tile.midX - halfShaft, y: top))
-    arrow.addLine(to: CGPoint(x: tile.midX + halfShaft, y: top))
-    arrow.addLine(to: CGPoint(x: tile.midX + halfShaft, y: shoulderY))
-    arrow.addLine(to: CGPoint(x: tile.midX + halfShoulder, y: shoulderY))
-    arrow.addLine(to: CGPoint(x: tile.midX, y: tip))
-    arrow.addLine(to: CGPoint(x: tile.midX - halfShoulder, y: shoulderY))
-    arrow.addLine(to: CGPoint(x: tile.midX - halfShaft, y: shoulderY))
-    arrow.closeSubpath()
-
-    context.addPath(arrow)
-    context.setFillColor(CGColor(red: 0.98, green: 0.99, blue: 1.0, alpha: 1))
-    context.fillPath()
+    context.setShadow(offset: .zero, blur: u(30), color: CGColor(red: 0.30, green: 0.55, blue: 1.0, alpha: 0.8))
+    number.draw(at: numberOrigin)
     context.restoreGState()
+
+    NSGraphicsContext.restoreGraphicsState()
 
     // Top highlight, the standard way to keep a tile from looking flat.
     let sheenColors = [
