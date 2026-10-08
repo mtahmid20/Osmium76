@@ -18,11 +18,14 @@ public struct ImageJob: Identifiable, Sendable {
 
     public let id: UUID
     public let sourceURL: URL
-    public let originalSize: Int64
+    public var originalSize: Int64
     public let pixelWidth: Int
     public let pixelHeight: Int
     public let sourceFormat: String
     public let thumbnail: Data?
+    /// > 1 for animated GIF/WebP, APNG and multi-page TIFF, which are refused
+    /// rather than flattened to a single frame.
+    public let frameCount: Int
 
     public var state: State = .pending
     public var outputURL: URL? = nil
@@ -42,7 +45,8 @@ public struct ImageJob: Identifiable, Sendable {
         pixelWidth: Int,
         pixelHeight: Int,
         sourceFormat: String,
-        thumbnail: Data? = nil
+        thumbnail: Data? = nil,
+        frameCount: Int = 1
     ) {
         self.id = id
         self.sourceURL = sourceURL
@@ -51,9 +55,12 @@ public struct ImageJob: Identifiable, Sendable {
         self.pixelHeight = pixelHeight
         self.sourceFormat = sourceFormat
         self.thumbnail = thumbnail
+        self.frameCount = frameCount
     }
 
     public var displayName: String { sourceURL.lastPathComponent }
+
+    public var isAnimated: Bool { frameCount > 1 }
 
     public var folderPath: String { sourceURL.deletingLastPathComponent().path }
 

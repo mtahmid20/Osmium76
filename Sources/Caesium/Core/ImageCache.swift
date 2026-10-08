@@ -34,12 +34,17 @@ final class ImageCache: @unchecked Sendable {
         cache.setObject(image, forKey: "preview-\(url.path)-\(Int(maxPixel))" as NSString)
     }
 
-    /// Decodes already-downscaled JPEG payloads produced by the encoder.
-    func image(from data: Data, maxPixel: CGFloat = 1800) -> NSImage? {
-        let key = "data-\(data.count)-\(data.prefix(16).hashValue)-\(Int(maxPixel))" as NSString
-        if let cached = cache.object(forKey: key) { return cached }
+    /// Decodes an already-downscaled payload produced by the encoder.
+    ///
+    /// The key must come from the caller, not from the bytes: every JPEG
+    /// ImageIO writes starts with an identical JFIF header, so hashing a prefix
+    /// of the data yields the same value for every image and the cache returns
+    /// whichever image happened to be stored first.
+    func image(from data: Data, key: String, maxPixel: CGFloat = 1800) -> NSImage? {
+        let cacheKey = "data-\(key)-\(Int(maxPixel))" as NSString
+        if let cached = cache.object(forKey: cacheKey) { return cached }
         guard let image = Self.makeImage(from: data, maxPixel: maxPixel) else { return nil }
-        cache.setObject(image, forKey: key)
+        cache.setObject(image, forKey: cacheKey)
         return image
     }
 

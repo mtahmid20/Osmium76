@@ -5,23 +5,28 @@ import ImageIO
 import UniformTypeIdentifiers
 
 public enum CompressionError: LocalizedError {
-    case unreadableSource
+case cancelled
+case unreadableSource
     case noFrames
     case decodeFailed
     case unsupportedFormat(OutputFormat)
     case encodeFailed
+    case animatedSource(frameCount: Int)
     case destinationUnavailable
     case writeFailed(String)
     case webPEncoderMissing
 
     public var errorDescription: String? {
         switch self {
+        case .cancelled: "Stopped."
         case .unreadableSource: "The file could not be opened."
         case .noFrames: "The file contains no image frames."
         case .decodeFailed: "The image data could not be decoded."
         case .unsupportedFormat(let format):
             "This Mac cannot encode \(format.displayName). Pick another format."
         case .encodeFailed: "The image encoder failed."
+        case .animatedSource(let frames):
+            "\(frames) frames — animations and multi-page documents are left untouched."
         case .destinationUnavailable: "The output file could not be created."
         case .writeFailed(let reason): "Could not save the file: \(reason)"
         case .webPEncoderMissing: WebPEncoder.unavailableReason
@@ -43,6 +48,8 @@ public enum ImageCompressor {
         public let formatName: String
         public let orientation: CGImagePropertyOrientation
         public let hasAlpha: Bool
+        /// Animated GIF/WebP, APNG and multi-page TIFF report more than one frame.
+        public let frameCount: Int
     }
 
     /// Reads dimensions and metadata without fully decoding pixel data.
@@ -63,7 +70,8 @@ public enum ImageCompressor {
             fileSize: fileSize(of: url),
             formatName: formatName(of: url),
             orientation: orientation,
-            hasAlpha: hasAlpha
+            hasAlpha: hasAlpha,
+            frameCount: CGImageSourceGetCount(source)
         )
     }
 
@@ -109,14 +117,30 @@ public enum ImageCompressor {
     }
 
     /// Decodes, re-orients, resizes, strips metadata and re-encodes a single image.
-    public static func compress(source data: Data, options: CompressionOptions) throws -> Output {
+    ///
+    /// - Parameter isCancelled: polled at each stage so a long encode can be
+    ///   abandoned promptly. Cancellation must never discard a file that has
+    ///   already been written, so callers check this *before* the destructive
+    ///   write, not after.
+    public static func compress(
+        source data: Data,
+        options: CompressionOptions,
+        isCancelled: () -> Bool = { false }
+    ) throws -> Output {
+        try checkCancelled(isCancelled)
         guard OutputFormat.isEncodable(options.format) else {
             throw CompressionError.unsupportedFormat(options.format)
         }
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
             throw CompressionError.unreadableSource
         }
-        guard CGImageSourceGetCount(source) > 0 else { throw CompressionError.noFrames }
+        let frameCount = CGImageSourceGetCount(source)
+        guard frameCount > 0 else { throw CompressionError.noFrames }
+        // Only frame 0 is ever decoded and a single-frame destination is built,
+        // so anything multi-frame would silently lose its remaining frames —
+        // and the caller is allowed to delete the original afterwards. Refuse
+        // rather than destroy the animation.
+        guard frameCount == 1 else { throw CompressionError.animatedSource(frameCount: frameCount) }
 
         let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
         let orientationValue = (properties?[kCGImagePropertyOrientation] as? NSNumber)?.uint32Value ?? 1
@@ -128,6 +152,7 @@ public enum ImageCompressor {
         }
 
         let prepared = try prepare(raw, orientation: orientation, options: options)
+        try checkCancelled(isCancelled)
         let metadata = MetadataPolicy.payload(
             from: properties,
             keepMetadata: !options.stripMetadata,
@@ -141,9 +166,14 @@ public enum ImageCompressor {
             quality: options.quality,
             lossless: options.lossless,
             metadata: metadata,
-            alphaHandling: alpha
+            alphaHandling: alpha,
+            isCancelled: isCancelled
         )
         return Output(data: encoded, pixelWidth: prepared.width, pixelHeight: prepared.height)
+    }
+
+    private static func checkCancelled(_ isCancelled: () -> Bool) throws {
+        if isCancelled() { throw CompressionError.cancelled }
     }
 
     /// Bakes EXIF orientation into pixels and applies the resolution cap.
@@ -210,7 +240,8 @@ public enum ImageCompressor {
         quality: Double,
         lossless: Bool = false,
         metadata: MetadataPolicy.Payload?,
-        alphaHandling: AlphaHandling
+        alphaHandling: AlphaHandling,
+        isCancelled: () -> Bool = { false }
     ) throws -> Data {
         guard OutputFormat.isEncodable(format) else { throw CompressionError.unsupportedFormat(format) }
 
@@ -230,7 +261,8 @@ public enum ImageCompressor {
                 image: source,
                 quality: quality,
                 lossless: lossless,
-                metadata: metadata
+                metadata: metadata,
+                isCancelled: isCancelled
             )
         }
 
@@ -305,6 +337,21 @@ public enum ImageCompressor {
     // MARK: - Output paths
 
     public static func destinationURL(for job: ImageJob, options: CompressionOptions) -> URL {
+        destinationURL(for: job, options: options, reservedPaths: [])
+    }
+
+    /// - Parameter reservedPaths: paths already claimed by this batch. Two
+    ///   sources with the same stem in different folders collapse to one name
+    ///   in a shared output folder, and with `avoidOverwrite` on, resolving each
+    ///   independently races: both see the name as free and both write it, so
+    ///   one output is overwritten and both originals may then be deleted.
+    ///   Reserving on the main actor, before any encoding starts, makes the
+    ///   assignment single-threaded regardless of parallelism.
+    public static func destinationURL(
+        for job: ImageJob,
+        options: CompressionOptions,
+        reservedPaths: Set<String>
+    ) -> URL {
         // A staged drop lives in the temp scratch folder, where "next to the
         // original" would bury the result where nobody can find it.
         let staged = DropStaging.isStaged(job.sourceURL)
@@ -329,7 +376,8 @@ public enum ImageCompressor {
 
         if options.avoidOverwrite && candidate != job.sourceURL {
             var counter = 2
-            while FileManager.default.fileExists(atPath: candidate.path) {
+            while FileManager.default.fileExists(atPath: candidate.path)
+                || reservedPaths.contains(candidate.standardizedFileURL.path) {
                 candidate = folder
                     .appendingPathComponent("\(name) (\(counter))")
                     .appendingPathExtension(options.format.fileExtension)
@@ -337,6 +385,23 @@ public enum ImageCompressor {
             }
         }
         return candidate
+    }
+
+    /// Assigns a distinct destination to every job in a batch. Must be called
+    /// once on the main actor before encoding starts; the result is passed
+    /// through to `BatchRunner` so each file writes where it was promised.
+    public static func reserveDestinations(
+        for jobs: [ImageJob],
+        options: CompressionOptions
+    ) -> [ImageJob.ID: URL] {
+        var reserved = Set<String>()
+        var assignments: [ImageJob.ID: URL] = [:]
+        for job in jobs {
+            let url = destinationURL(for: job, options: options, reservedPaths: reserved)
+            reserved.insert(url.standardizedFileURL.path)
+            assignments[job.id] = url
+        }
+        return assignments
     }
 
     static func isSameFormat(_ url: URL, _ format: OutputFormat) -> Bool {

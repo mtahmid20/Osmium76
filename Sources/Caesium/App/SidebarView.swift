@@ -66,6 +66,17 @@ struct SidebarView: View {
                 resizeControls
             }
 
+            if model.jobs.contains(where: { !$0.state.isFinished && $0.isAnimated }) {
+                Section {
+                    Label(
+                        "Animations and multi-page documents are skipped to keep every frame.",
+                        systemImage: "info.circle"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+            }
+
             Section("Privacy") {
                 Toggle("Remove metadata", isOn: $model.options.stripMetadata)
                     .disabled(model.isRunning)
@@ -81,6 +92,14 @@ struct SidebarView: View {
                 Toggle("Save next to originals", isOn: $model.options.writeAlongside)
                     .disabled(model.isRunning)
 
+                // Without a folder chosen, Compress would prompt; say so
+                // before the user discovers it mid-run.
+                if !model.options.writeAlongside && model.options.outputFolder == nil {
+                    Label("Choose a destination folder before compressing.", systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+
                 if model.hasStagedDrops {
                     Label(
                         "Some images were dropped without a file location, so they will be saved to a folder you choose.",
@@ -92,7 +111,7 @@ struct SidebarView: View {
 
                 if !model.options.writeAlongside {
                     HStack {
-                        Text(model.options.outputFolder?.lastPathComponent ?? "Choose…")
+                        Text(model.options.outputFolder?.lastPathComponent ?? "Choose a folder…")
                             .lineLimit(1)
                             .truncationMode(.middle)
                             .foregroundStyle(model.options.outputFolder == nil ? .secondary : .primary)

@@ -43,7 +43,8 @@ public enum WebPEncoder {
         image: CGImage,
         quality: Double,
         lossless: Bool,
-        metadata: MetadataPolicy.Payload?
+        metadata: MetadataPolicy.Payload?,
+        isCancelled: () -> Bool = { false }
     ) throws -> Data {
         guard let toolURL else { throw CompressionError.webPEncoderMissing }
 
@@ -54,6 +55,7 @@ public enum WebPEncoder {
         let outputURL = staging.appendingPathComponent("out.webp")
 
         try writePNG(image, metadata: metadata, to: inputURL)
+        if isCancelled() { throw CompressionError.cancelled }
 
         var arguments = [
             "-quiet",
@@ -69,7 +71,10 @@ public enum WebPEncoder {
         }
         arguments += [inputURL.path, "-o", outputURL.path]
 
-        try run(toolURL, arguments: arguments)
+        // cwebp can take many seconds on a large image and `waitUntilExit()` is
+        // uninterruptible, so termination is polled and the child is killed
+        // as soon as the user hits Stop.
+        try run(toolURL, arguments: arguments, isCancelled: isCancelled)
 
         guard let data = try? Data(contentsOf: outputURL), !data.isEmpty else {
             throw CompressionError.encodeFailed
@@ -123,7 +128,11 @@ public enum WebPEncoder {
         try (buffer as Data).write(to: url, options: .atomic)
     }
 
-    private static func run(_ tool: URL, arguments: [String]) throws {
+    private static func run(
+        _ tool: URL,
+        arguments: [String],
+        isCancelled: () -> Bool
+    ) throws {
         let process = Process()
         process.executableURL = tool
         process.arguments = arguments
@@ -135,7 +144,14 @@ public enum WebPEncoder {
         } catch {
             throw CompressionError.webPEncoderMissing
         }
-        process.waitUntilExit()
+
+        while process.isRunning {
+            if isCancelled() {
+                process.terminate()
+                throw CompressionError.cancelled
+            }
+            Thread.sleep(forTimeInterval: 0.05)
+        }
 
         guard process.terminationStatus == 0 else {
             throw CompressionError.encodeFailed

@@ -17,7 +17,7 @@ enum MetadataPolicy {
     // dictionaries, and ImageIO exposes it as kCGImagePropertyTIFFOrientation.
     private enum Tag {
         static let orientation = kCGImagePropertyTIFFOrientation
-        static let geographic = ["GPS", "LATITUDE", "LON as CFStringGITUDE", "ALTITUDE"]
+        static let geographic = ["GPS", "LATITUDE", "LONGITUDE", "ALTITUDE"]
     }
 
     static func payload(

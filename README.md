@@ -13,6 +13,9 @@ dependencies, nothing leaves the machine.
 ./build.sh debug    # debug build
 ```
 
+Git repo on `main`, no remote. There is no test target or CI. Verification is
+`swift build` plus the parse check below.
+
 Then either `open build/Caesium.app`, or during development just:
 
 ```sh
@@ -94,13 +97,19 @@ Sources/Caesium/App/      SwiftUI views
 
 ## Notes
 
-- WebP encoding only appears if the running macOS build exposes a WebP encoder
-  through ImageIO. Check Settings → Formats to see what your system supports.
+- WebP is encoded by libwebp's `cwebp` (`brew install webp`), not ImageIO — the
+  macOS SDK has a WebP *decoder* but no encoder. Settings → Formats shows which
+  encoder backs each format on the current machine.
 - PNG output is lossless: only resizing and metadata removal apply.
 - `build.sh` signs ad-hoc, which is enough for local use. For distribution you
   need a Developer ID certificate and a notarised bundle.
 - "Remove location data" drops the GPS dictionary and any geographic EXIF/TIFF
   tag. Individual EXIF/TIFF keys are matched by their literal string values
   because the SDK does not expose the `kCGImagePropertyExif…` constants to Swift.
+  A plain `file` listing won't show those tags either way; check the payload
+  dictionary rather than trusting the filename.
+- Animated GIF/WebP, APNG and multi-page TIFF are **skipped**, not flattened:
+  only frame 0 is ever decoded, so compressing them would silently discard the
+  rest of the animation.
 - HEIC alpha is written automatically by ImageIO from the source `CGImage`; the
   HEIC dictionary keys that control it are private API.

@@ -125,12 +125,18 @@ struct PreviewPane: View {
         let resultPreview = job.preview
 
         let loaded = await Task.detached(priority: .userInitiated) { () -> (NSImage?, NSImage?) in
+            // Keyed by job id and role, so the "before" and "after" halves of
+            // the comparison can never resolve to the same cached image.
             let before: NSImage? = {
-                if let originalPreview { return ImageCache.shared.image(from: originalPreview) }
+                if let originalPreview {
+                    return ImageCache.shared.image(from: originalPreview, key: "\(jobID.uuidString)-before")
+                }
                 return ImageCache.shared.preview(for: sourceURL)
             }()
             let after: NSImage? = {
-                if let resultPreview { return ImageCache.shared.image(from: resultPreview) }
+                if let resultPreview {
+                    return ImageCache.shared.image(from: resultPreview, key: "\(jobID.uuidString)-after")
+                }
                 guard let outputURL,
                       FileManager.default.fileExists(atPath: outputURL.path) else { return nil }
                 return ImageCache.shared.preview(for: outputURL)
